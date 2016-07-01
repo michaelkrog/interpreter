@@ -5,7 +5,7 @@ public class Application: GLib.Object {
   audioconvert ! faac quality=1000 ! mpegtsmux name=muxer ! tsparse ! rtpmp2tpay ! tcpserversink port=3333";
 
   private Pipeline pipeline;
-  private Bus bus;
+  private Gst.Bus bus;
   private MainLoop loop;
 
   public Application() {

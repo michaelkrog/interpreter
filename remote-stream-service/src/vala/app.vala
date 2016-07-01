@@ -1,17 +1,38 @@
 using Gst;
+using Gee;
+
+public class ApplicationInfoHandler : GLib.Object, InfoHandler {
+    private HashMap<string, string> _map = new HashMap<string, string>();
+
+    public HashMap<string, string> map {
+        get { return _map; }
+    }
+
+    public HashMap<string, string> getInfoMap () {
+      return this._map;
+    }
+}
+
+public class ApplicationMetricsHandler: GLib.Object, MetricsHandler {
+
+}
 
 public class Application: GLib.Object {
   private static string pads = "audio/x-raw,channels=2,rate=48000,format=F32LE";
-  private string @pipeline_template = "tcpclientsrc port=3333 name=src1 !
+  private string pipeline_template = "tcpclientsrc port=3333 name=src1 !
     queue ! decodebin ! queue !
     audioconvert ! audioresample ! " + pads + " ! tee name=src1_split !
     " + pads + " ! queue ! volume name=volume ! audiomixer name=mixer ! queue !
-    audioconvert ! faac ! mux.audio_0
+    audioconvert ! faac ! aacparse ! mux.
     src1_split. ! queue ! audioconvert ! " + pads + " ! autoaudiosink
     autoaudiosrc ! level name=level ! queue ! audioconvert ! audioresample !
     " + pads + " ! mixer.
-    tcpclientsrc port=2220 ! queue ! tsdemux ! h264parse ! mux.video_0
-    mp4mux name=mux ! filesink name=filesink";
+    tcpclientsrc port=2220 ! queue ! tsdemux ! h264parse ! mux.
+    mpegtsmux name=mux ! filesink name=filesink";
+    //tcpclientsrc port=2220 ! queue ! tsdemux ! h264parse ! mux.video_0
+
+    private ApplicationMetricsHandler metricsHandler = new ApplicationMetricsHandler();
+    private ApplicationInfoHandler infoHandler = new ApplicationInfoHandler();
 
   /*private string @pipeline_template = """filesrc name=src1 !
     mad ! queue ! audioconvert ! audioresample ! """+pads+""" ! tee name=src1_split !
@@ -22,7 +43,7 @@ public class Application: GLib.Object {
     """+pads+""" ! mixer.
   """;*/
   private Pipeline pipeline;
-  private Bus bus;
+  private Gst.Bus bus;
   private MainLoop loop;
   private Element src1;
   private Element filesink;
@@ -125,20 +146,33 @@ public class Application: GLib.Object {
         return true;
   }
 
+  public void shutdown() {
+    stdout.printf ("Shutting down.\n");
+    pipeline.send_event(new Event.eos());
+    StateChangeReturn ret = pipeline.set_state(State.NULL);
+    while(ret == StateChangeReturn.ASYNC) {
+      yield;
+    }
+    loop.quit();
+  }
+
   public void start() {
-    // Set pipeline state to PLAYING
-    pipeline.set_state (State.PLAYING);
+
+    int port = 8088;
 
     // Creating and starting a GLib main loop
     loop = new MainLoop();
-    GLib.Timeout.add (20000, () => {
-      StateChangeReturn ret = pipeline.set_state(State.PAUSED);
-      while(ret == StateChangeReturn.ASYNC) {
-        yield;
-      }
-      loop.quit();
-      return false;
-    });
+
+    Controller controller = new Controller (this.infoHandler, this.metricsHandler);
+    controller.listen_all (port, 0);
+    controller.got_shutdown.connect (this.shutdown);
+
+    this.infoHandler.map["pipeline"] = this.pipeline_template;
+
+    // Set pipeline state to PLAYING
+    pipeline.set_state (State.PLAYING);
+    this.infoHandler.map["status"] = "Playing";
+
     loop.run ();
   }
 

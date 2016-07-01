@@ -4,9 +4,9 @@ public class Application: GLib.Object {
   private static string SCALE = "split. ! queue ! videoconvert ! videoscale";
   private static string ENCODE = "x264enc ! mpegtsmux ! tsparse ! rtpmp2tpay ! tcpserversink";
   private string pipeline_template = "videotestsrc ! tee name=split
-  " + SCALE + " ! video/x-raw,width=720,height=576 ! " + ENCODE + " port=2220
-  " + SCALE + " ! video/x-raw,width=480,height=360 ! " + ENCODE + " port=2221
-  " + SCALE + " ! video/x-raw,width=352,height=240 ! " + ENCODE + " port=2222 ";
+  " + SCALE + " ! clockoverlay !  video/x-raw,width=720,height=576 ! " + ENCODE + " port=2220
+  " + SCALE + " ! clockoverlay !  video/x-raw,width=480,height=360 ! " + ENCODE + " port=2221
+  " + SCALE + " ! clockoverlay !  video/x-raw,width=352,height=240 ! " + ENCODE + " port=2222 ";
 
   private Pipeline pipeline;
   private Bus bus;
