@@ -24,6 +24,8 @@ public class Controller : Soup.Server {
 
     this.add_handler ("/event-stream", this.event_handler);
     this.add_handler ("/shutdown", this.shutdown_handler);
+    this.add_handler ("/start", this.start_handler);
+    this.add_handler ("/stop", this.stop_handler);
     this.add_handler ("/info", this.info_handler);
     this.add_handler ("/env", this.env_handler);
     this.add_handler ("/metrics", this.metrics_handler);
@@ -31,6 +33,9 @@ public class Controller : Soup.Server {
 	}
 
   public signal void got_shutdown ();
+  public signal void got_start ();
+  public signal void got_stop ();
+
 
   private void metrics_handler (Soup.Server server, Soup.Message msg, string path, GLib.HashTable? query, Soup.ClientContext client) {
 
@@ -93,6 +98,22 @@ public class Controller : Soup.Server {
       msg.set_status(Soup.Status.OK);
       stdout.printf ("Shutdown request recieved.\n");
       this.got_shutdown();
+    }
+  }
+
+  private void start_handler (Soup.Server server, Soup.Message msg, string path, GLib.HashTable? query, Soup.ClientContext client) {
+    if(msg.method == "POST") {
+      msg.set_status(Soup.Status.OK);
+      stdout.printf ("Start request recieved.\n");
+      this.got_start();
+    }
+  }
+
+  private void stop_handler (Soup.Server server, Soup.Message msg, string path, GLib.HashTable? query, Soup.ClientContext client) {
+    if(msg.method == "POST") {
+      msg.set_status(Soup.Status.OK);
+      stdout.printf ("Stop request recieved.\n");
+      this.got_stop();
     }
   }
 

@@ -51,25 +51,11 @@ public class Application: GLib.Object {
   private Element volume;
   private Element encode;
   private double current_volume = 1.0;
+  private string output_path;
+  private bool shuttingDown = false;
 
   public Application(string output_path) {
-    // Creating pipeline and elements
-    pipeline = (Pipeline)parse_launch(pipeline_template);
-
-    src1 = pipeline.get_by_name("src1");
-    filesink = pipeline.get_by_name("filesink");
-    level = pipeline.get_by_name("level");
-    volume = pipeline.get_by_name("volume");
-    encode = pipeline.get_by_name("encode");
-
-    //src1.set_property("uri", input_uri);
-    filesink.set_property("location", output_path);
-    level.set_property("peak-falloff", 40);
-    encode.set_property("quality", 3);
-    encode.set_property("encoding-engine-quality", "high");
-
-    bus = pipeline.get_bus();
-    bus.add_watch (0, bus_callback);
+    this.output_path = output_path;
   }
 
   private void handleDecay(double decay) {
@@ -113,6 +99,7 @@ public class Application: GLib.Object {
             break;
         case MessageType.EOS:
             stdout.printf ("end of stream\n");
+            this.destroyPipeline();
             break;
         case MessageType.STATE_CHANGED:
             Gst.State oldstate;
@@ -123,11 +110,11 @@ public class Application: GLib.Object {
             stdout.printf ("state changed: %s->%s:%s\n",
                            oldstate.to_string (), newstate.to_string (),
                            pending.to_string ());
-            this.infoHandler.map["state"] = newstate.to_string ();
+            this.infoHandler.map["state"] = this.state_from_gst_state(newstate);
             break;
         case MessageType.TAG:
             //Gst.TagList tag_list;
-            stdout.printf ("taglist found\n");
+            //stdout.printf ("taglist found\n");
             //message.parse_tag (out tag_list);
             //tag_list.foreach ((TagForeachFunc) foreach_tag);
             break;
@@ -170,14 +157,58 @@ public class Application: GLib.Object {
         return true;
   }
 
+  private void stopPipeline() {
+    if(this.pipeline != null) {
+      stdout.printf ("Stopping pipeline.\n");
+      pipeline.send_event(new Event.eos());
+    }
+  }
+
+  private void destroyPipeline() {
+    stdout.printf ("Destroying pipeline.\n");
+    pipeline.set_state(State.NULL);
+    pipeline = null;
+    this.infoHandler.map["state"] = this.state_from_gst_state(State.NULL);
+
+    if(this.shuttingDown) {
+      stdout.printf ("Quiting.\n");
+      loop.quit();
+    }
+  }
+
+  private void startPipeline() {
+    if(this.pipeline == null) {
+      stdout.printf ("Starting pipeline.\n");
+      // Creating pipeline and elements
+      pipeline = (Pipeline)parse_launch(pipeline_template);
+
+      src1 = pipeline.get_by_name("src1");
+      filesink = pipeline.get_by_name("filesink");
+      level = pipeline.get_by_name("level");
+      volume = pipeline.get_by_name("volume");
+      encode = pipeline.get_by_name("encode");
+
+      //src1.set_property("uri", input_uri);
+      filesink.set_property("location", output_path);
+      level.set_property("peak-falloff", 40);
+      encode.set_property("quality", 3);
+      encode.set_property("encoding-engine-quality", "high");
+
+      bus = pipeline.get_bus();
+      bus.add_watch (0, bus_callback);
+
+      pipeline.set_state (State.PLAYING);
+    }
+  }
+
   public void shutdown() {
     stdout.printf ("Shutting down.\n");
-    pipeline.send_event(new Event.eos());
-    StateChangeReturn ret = pipeline.set_state(State.NULL);
-    while(ret == StateChangeReturn.ASYNC) {
-      yield;
+    if(this.pipeline != null) {
+      this.shuttingDown = true;
+      this.stopPipeline();
+    } else {
+      loop.quit();
     }
-    loop.quit();
   }
 
   public void start() {
@@ -190,13 +221,32 @@ public class Application: GLib.Object {
     Controller controller = new Controller (this.infoHandler, this.metricsHandler);
     controller.listen_all (port, 0);
     controller.got_shutdown.connect (this.shutdown);
+    controller.got_start.connect (this.startPipeline);
+    controller.got_stop.connect (this.stopPipeline);
 
     this.infoHandler.map["pipeline"] = this.pipeline_template;
+    this.infoHandler.map["state"] = this.state_from_gst_state(Gst.State.NULL);
 
-    // Set pipeline state to PLAYING
-    pipeline.set_state (State.PLAYING);
-
+    stdout.printf ("Started.\n");
     loop.run ();
+
+
+
+  }
+
+  private string state_from_gst_state(Gst.State state) {
+    switch(state) {
+      case Gst.State.NULL:
+        return "Idle";
+      case Gst.State.PLAYING:
+        return "Playing";
+      case Gst.State.PAUSED:
+        return "Paused";
+      case Gst.State.READY:
+        return "Ready";
+      default:
+        return "None";
+    }
   }
 
   public static int main (string[] args) {
