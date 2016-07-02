@@ -77,7 +77,7 @@ public class Application: GLib.Object {
     double max_vol = 1.0;
     double target_volume;
     double new_volume = 1.0;
-    stdout.printf ("DECAY: %s\n", decay.to_string());
+    //stdout.printf ("DECAY: %s\n", decay.to_string());
     if(decay > -20) {
       target_volume = fade_to;
     } else {
@@ -123,6 +123,7 @@ public class Application: GLib.Object {
             stdout.printf ("state changed: %s->%s:%s\n",
                            oldstate.to_string (), newstate.to_string (),
                            pending.to_string ());
+            this.infoHandler.map["state"] = newstate.to_string ();
             break;
         case MessageType.TAG:
             //Gst.TagList tag_list;
@@ -139,8 +140,31 @@ public class Application: GLib.Object {
 
           }
           break;
+        case MessageType.INFO:
+          stdout.printf ("info message\n");
+          break;
+        case MessageType.BUFFERING:
+          stdout.printf ("buffering message\n");
+          break;
+        case MessageType.STREAM_STATUS:
+          Gst.StreamStatusType type;
+          Gst.Element owner;
+          message.parse_stream_status (out type, out owner);
+
+          stdout.printf ("stream changed: %s\n", type.to_string());
+
+          break;
+        case MessageType.QOS:
+          stdout.printf ("QOS message\n");
+          break;
+        case MessageType.UNKNOWN:
+          stdout.printf ("unknown message\n");
+          break;
+        case MessageType.WARNING:
+          stdout.printf ("warning message\n");
+          break;
         default:
-            break;
+          break;
         }
 
         return true;
@@ -171,7 +195,6 @@ public class Application: GLib.Object {
 
     // Set pipeline state to PLAYING
     pipeline.set_state (State.PLAYING);
-    this.infoHandler.map["status"] = "Playing";
 
     loop.run ();
   }

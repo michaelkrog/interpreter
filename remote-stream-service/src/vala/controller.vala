@@ -25,6 +25,7 @@ public class Controller : Soup.Server {
     this.add_handler ("/event-stream", this.event_handler);
     this.add_handler ("/shutdown", this.shutdown_handler);
     this.add_handler ("/info", this.info_handler);
+    this.add_handler ("/env", this.env_handler);
     this.add_handler ("/metrics", this.metrics_handler);
 		//this.add_handler (null, this.default_handler);
 	}
@@ -34,6 +35,32 @@ public class Controller : Soup.Server {
   private void metrics_handler (Soup.Server server, Soup.Message msg, string path, GLib.HashTable? query, Soup.ClientContext client) {
 
   }
+
+  private void env_handler (Soup.Server server, Soup.Message msg, string path, GLib.HashTable? query, Soup.ClientContext client) {
+    if(msg.method == "GET") {
+      stdout.printf ("Environment request recieved.\n");
+      msg.set_status(Soup.Status.OK);
+      string[] args = Environment.list_variables ();
+      string message = "{";
+      int count = 0;
+    	foreach (string arg in args) {
+  		    stdout.printf ("%s\n", arg);
+
+          if(count > 0) {
+            message += ",";
+          }
+          message += "\n\t";
+          message += "\"" + arg + "\": ";
+          message += "\""+ this.escape_json_value(Environment.get_variable(arg)) + "\"";
+          count++;
+    	}
+      message+="\n}";
+      stdout.printf ("Sending Environment request.\n");
+      msg.set_response("application/json", Soup.MemoryUse.COPY, message.data);
+    }
+  }
+
+
 
   private void info_handler (Soup.Server server, Soup.Message msg, string path, GLib.HashTable? query, Soup.ClientContext client) {
     if(msg.method == "GET") {
@@ -91,6 +118,10 @@ public class Controller : Soup.Server {
 		// Pauses HTTP I/O on msg:
 		self.pause_message (msg);
 	}
+
+  private string escape_json_value(string value) {
+    return value.replace("\"", "\\\"");
+  }
 
 
 }
